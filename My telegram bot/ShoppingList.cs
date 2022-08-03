@@ -13,14 +13,10 @@ namespace My_telegram_bot
     {
         private ITelegramBotClient botClient;
         private Message message;
-        int listItemNumber;
         Dictionary<string, string> callbackQueryList = new Dictionary<string, string>();
-        List<Message> messages = new List<Message>();
-        //List<string> shoppingList = new List<string>();
         private string likeSticker = "✅";
         private string beforeLikeSticker = "⬜️";
         private string caption = $"Your shopping list 🗓:\n({DateTime.Now})\n";
-
 
         public ShoppingList(ITelegramBotClient botClient, Message message)
         {
@@ -28,7 +24,7 @@ namespace My_telegram_bot
             this.message = message;
         }
 
-        private Dictionary<string, string> CreateDictionary(List<string> shoppingList)
+        private Dictionary<string, string> CreateDictionary(List<string> shoppingList) //the method converts the shopping list into a dictionary for the subsequent creation of an inline keyboard
         {
             for (int i = 0; i < shoppingList.Count; i++)
             {
@@ -38,11 +34,11 @@ namespace My_telegram_bot
 
             return callbackQueryList;
         }
-        private static InlineKeyboardMarkup GetInlineKeyboardCallBackData(Dictionary<string, string> buttonsData)
-        {
-            //the method accepts a Dictionary<string text, string callBackData>
-            // and returns an inline keyboard
+       
+        private static InlineKeyboardMarkup GetInlineKeyboardCallBackData(Dictionary<string, string> buttonsData) //the method accepts a Dictionary<string text, string callBackData> and returns an inline keyboard
 
+        {
+            
             // Rows Count
             int count = buttonsData.Count;
 
@@ -66,37 +62,52 @@ namespace My_telegram_bot
             return new InlineKeyboardMarkup(buttons);
         }
 
-        public async Task CreateListReplay(List<string> list)
+        public async Task CreateListReplay(List<string> list)//creating a shopping list via replay to a message
         {
             string startWord = message.ReplyToMessage.Text;
 
-            for (int i = 0; i < list.Count; i++)
+            try
             {
-                if(list[i] == startWord)
+                for (int i = 0; i < list.Count; i++)
                 {
-                    list.RemoveRange(0,i);
+                    if (list[i] == startWord)
+                    {
+                        list.RemoveRange(0, i);
+                        break;
+                    }
                 }
-            }
-
-            InlineKeyboardMarkup inlineKeyboardMarkup = GetInlineKeyboardCallBackData(CreateDictionary(list));
-
-            await botClient.SendTextMessageAsync(message.Chat.Id, caption, replyMarkup: inlineKeyboardMarkup);
-            return;
-        }
-        public async Task CreateListCommand(List<string> list)
-        {
-            int count = int.Parse(message.Text.Split(' ')[1]);
-            Console.WriteLine(string.Join(", ", list));
-
-            if (count > list.Count)
+            }catch (Exception ex)
             {
-                await botClient.SendTextMessageAsync(message.Chat.Id, "Не правильное количиство элементов списка");
+                await botClient.SendTextMessageAsync(message.Chat.Id, $"Something went wrong:)\n{ex.ToString()}");
                 return;
             }
-            else
-            if(count < list.Count)
+
+            InlineKeyboardMarkup inlineKeyboardMarkup = GetInlineKeyboardCallBackData(CreateDictionary(list));
+
+            await botClient.SendTextMessageAsync(message.Chat.Id, caption, replyMarkup: inlineKeyboardMarkup);
+            return;
+        }
+
+        public async Task CreateListCommand(List<string> list) //creating a shopping list via replay to a message
+        {
+            try
             {
-                list.RemoveRange(count,list.Count - count);
+                int count = int.Parse(message.Text.Split(' ')[1]);
+
+                if (count > list.Count)
+                {
+                    await botClient.SendTextMessageAsync(message.Chat.Id, "Не правильное количиство элементов списка");
+                    return;
+                }
+                else
+                if (count < list.Count)
+                {
+                    list.RemoveRange(count, list.Count - count);
+                }
+            }catch(Exception ex)
+            {
+                await botClient.SendTextMessageAsync(message.Chat.Id, $"Something went wrong:)\n{ex.ToString()}");
+                return;
             }
 
             InlineKeyboardMarkup inlineKeyboardMarkup = GetInlineKeyboardCallBackData(CreateDictionary(list));
@@ -105,7 +116,7 @@ namespace My_telegram_bot
             return;
         }
 
-        public async Task HandlerCallbackQueryShopping(CallbackQuery callbackQuery) //TODO: Добавитиь Сохранение??
+        public async Task HandlerCallbackQueryShopping(CallbackQuery callbackQuery) //inline keyboard click handler
         {
             if (callbackQuery.Data == "ShoppingList.Delete")
             {
