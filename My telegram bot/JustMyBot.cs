@@ -10,41 +10,23 @@ using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using Telegram.Bot.Extensions.Polling;
 using Telegram.Bot.Exceptions;
+using System.Speech.Synthesis;
+using System.Speech.AudioFormat;
 
 namespace My_telegram_bot
 {
     internal class JustMyBot
     {
-        private static string BotToken = Environment.GetEnvironmentVariable("BotToken"); 
+        private static string BotToken = Environment.GetEnvironmentVariable("BotToken");
         private TelegramBotClient botClient = new TelegramBotClient(BotToken);
         private CancellationToken cancellationToken = new CancellationToken();
         private ReceiverOptions receiverOptions = new ReceiverOptions { AllowedUpdates = { } };
-        private ReplyKeyboardMarkup BaseReplyKeyboardMarkup;
-        private bool isShoppingListElement = false;
-        private bool isNotes = false;
-        private bool isSpending = false;
-        int database = 0;
+        
         private System.Timers.Timer aTimer = new System.Timers.Timer(60000);
         private int count = 1;
-        //private List<string> shoppindList = new List<string>();
-
-        //public JustMyBot()
-        //{
-        //    BaseReplyKeyboardMarkup =
-        //    new
-        //    (
-        //        new[]
-        //        {
-        //                new KeyboardButton[] { "Folders", "Notes" },
-        //                new KeyboardButton[] { "Shopping list", "Spending" }
-        //        }
-        //    )
-        //    {
-        //        ResizeKeyboard = true,
-        //        OneTimeKeyboard = true
-        //    };
-
-        //}
+        private ShoppingList shoppingList;
+        private List<string> list = new List<string>();
+        int database = 0;
         public async Task Start()
         {
             botClient.StartReceiving(HandlerUpdateAsync, HandlerError, receiverOptions, cancellationToken);
@@ -81,41 +63,32 @@ namespace My_telegram_bot
 
         private async Task HandlerUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
+
             if (update.Type == UpdateType.Message && update?.Message?.Text != null)
             {
-                await HandlerMessageAsync(botClient, update.Message);
+                if (update.Message.From.Username == "egorpustovoit")
+                {
+                    await HandlerMessageAsync(botClient, update.Message);
+                }
+                else
+                {
+                    await using Stream stream = System.IO.File.OpenRead(@"C:\\Users\\Egor\\OneDrive\\Рабочий стол\\Fixed Gear\\notmevoice.wav");
+                    await botClient.SendVoiceAsync(update.Message.Chat.Id, voice: new Telegram.Bot.Types.InputFiles.InputOnlineFile(content: stream, fileName: "test.wav"));
+                    return;
+                }
             }
             if (update?.Type == UpdateType.CallbackQuery)
             {
                 await HandlerCallbackQuery(botClient, update.CallbackQuery);
             }
-            if (update?.Type == UpdateType.Message && update.Message.Type == MessageType.Voice)
-            {
-                    var message = update.Message;
-
-                //    var file = botClient.GetFileAsync(message.Voice.FileId);
-                //    Console.WriteLine(file);
-                //    var fileName = @"C:\Users\Egor\OneDrive\Рабочий стол\Fixed Gear\" + file.Result.FileId + "." + file.Result.FilePath.Split('.').Last();
-                //    Console.WriteLine(fileName);
-
-                //    using (var saveImageStream = System.IO.File.Open(fileName, FileMode.Create))
-                //    {
-                //        botClient.DownloadFileAsync(file.Result.FilePath, saveImageStream);
-                //    }
-                //    botClient.SendTextMessageAsync(message.Chat.Id, "Image save");
-                //    return;
-                var file = await botClient.GetFileAsync(message.Voice.FileId);
-                FileStream fs = new FileStream(@"C:\Users\Egor\OneDrive\Рабочий стол\Fixed Gear\voice1.ogg", FileMode.Create);
-                await botClient.DownloadFileAsync(file.FilePath, fs);
-                fs.Close();
-                fs.Dispose();
-            }
         }
 
         private async Task HandlerCallbackQuery(ITelegramBotClient botClient, CallbackQuery? callbackQuery)
         {
-            if (callbackQuery.Data.StartsWith(" "))
+            if (callbackQuery.Data.StartsWith("ShoppingList"))
             {
+                shoppingList.HandlerCallbackQueryShopping(callbackQuery);
+                return;
             }
         }
 
@@ -125,7 +98,6 @@ namespace My_telegram_bot
         {
             Console.WriteLine("___________________________");
             Console.WriteLine("Text: " + message.Text + ", messageId: " + message.MessageId);
-            Console.WriteLine(message.From.Username);
             Console.WriteLine("___________________________");
 
             if (message.Text == "/start")//comand
@@ -136,11 +108,9 @@ namespace My_telegram_bot
             else
             if (message.Text == "/toNotes")
             {
+                // заметки вынести в отдельную папу (не делать отдельную фитчу)
                 var note = message.ReplyToMessage?.Text;
-                Console.WriteLine($"User {message.From.Username} save text {note} to notes");
-                await botClient.SendTextMessageAsync(message.Chat.Id, $"You saved text {note} to notes");
-                // to database
-                return;
+
             }
             else
             if (int.TryParse(message.Text, out int currentSpending))
@@ -159,63 +129,93 @@ namespace My_telegram_bot
                 // get info from database
                 return;
             }
-            if (message.Text.StartsWith("/list") || message.Text.StartsWith("/Готово"))
+            if (message.Text.StartsWith("/list")) // парсить и получать N (/list N) последних сообщений 
             {
+                shoppingList = new ShoppingList(botClient, message);
 
-                ShoppingList shoppingList = new ShoppingList(botClient,message);
-                
-                await shoppingList.ListViaCommand();
+                await shoppingList.CreateListCommand(list);
+                list.Clear();
+                count = 1;
                 return;
-
-                ////int listItemNumber = int.Parse(message.Text.Split(' ')[1]);
-
-                //// not for prod
-                //string text = "";                                                                       // wery good !
-                ////await botClient.SendTextMessageAsync(message.Chat.Id, "Start with?", replyToMessageId: message.MessageId - (listItemNumber * 2));
-                //List<Message> messages = new List<Message>();
-
-                //for (int i = message.MessageId - (listItemNumber * 2); i < message.MessageId; i += 2)
-                //{
-                //    Message message1 = botClient.ForwardMessageAsync(message.Chat.Id, message.Chat.Id, i).Result ; //message.MessageId - (listItemNumber * 2)
-                //    messages.Add(message1);
-                //}
-                //string list = "Your shopping list: \n";
-                //foreach(Message message2 in messages)
-                //{
-                //    list += "- "+ message2.Text + "\n";
-                //}
-                //await botClient.SendTextMessageAsync(message.Chat.Id, list);
-                //return;
-                ////TODO: Решить как правильно организовать список покупок, конкретизируюя, как получать сообщения по Id
-
-                //return;
             }
-            if (message.Text == "/voice")
+            if(Char.TryParse(message.Text, out char point)) // получать сообщения начиная с сообщения на которое ответили  
             {
-                //await botClient.SendChatActionAsync(message.Chat.Id, ChatAction.UploadPhoto);
+                shoppingList = new ShoppingList(botClient, message);
 
-                //const string filePath = @"C:\Users\Egor\OneDrive\Рабочий стол\Fixed Gear\AwACAgIAAxkBAAIBjGLiNVTL2klfx5Rj8HJ63sUooftoAAIlHAACNfkRS_PoKw8JTPgCKQQ.oga";
-                //using FileStream fileStream = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                //var fileName = filePath.Split(Path.DirectorySeparatorChar).Last();
+                await shoppingList.CreateListReplay(list);
+                list.Clear();
+                count = 1;
+                return;
+            }
+            if (message.Text.StartsWith("/voice"))
+            {
+                var name = message.ReplyToMessage?.Text;
 
-                //await botClient.SendVoiceAsync(message.Chat.Id, new Telegram.Bot.Types.InputFiles.InputOnlineFile(fileStream, fileName));
-                //return;
+                using (SpeechSynthesizer synth = new SpeechSynthesizer())
+                {
+                    synth.Volume = 100;
+                    synth.Rate = 3;
 
-                //await using Stream stream = System.IO.File.OpenRead(Constants.PathToFile.Documents.Hamlet);
-                //Message message = await BotClient.SendDocumentAsync(
-                //    chatId: _fixture.SupergroupChat.Id,
-                //    document: new InputOnlineFile(content: stream, fileName: "HAMLET.pdf"),
-                //    caption: "The Tragedy of Hamlet,\nPrince of Denmark"
+                    // Configure the audio output.   
+                    synth.SetOutputToWaveFile(@"C:\Users\Egor\OneDrive\Рабочий стол\Fixed Gear\test.wav",
+                      new SpeechAudioFormatInfo(44100, AudioBitsPerSample.Sixteen, AudioChannel.Mono));
 
-                await using Stream stream = System.IO.File.OpenRead(@"C:\Users\Egor\OneDrive\Рабочий стол\Fixed Gear\voice1.mp3");
-                await botClient.SendVoiceAsync(message.Chat.Id, voice: new Telegram.Bot.Types.InputFiles.InputOnlineFile(content: stream, fileName: "voice1.ogg"));
+                    // Create a SoundPlayer instance to play output audio file.  
+                    //System.Media.SoundPlayer m_SoundPlayer =
+                    //  new System.Media.SoundPlayer(@"C:\Users\Egor\OneDrive\Рабочий стол\Fixed Gear\synthBody.mp3");
+
+                    // Build a prompt.  
+                    PromptBuilder builder = new PromptBuilder();
+                    builder.AppendText(name);
+
+                    // Speak the prompt.  
+                    synth.Speak(builder);
+                    //m_SoundPlayer.Play();
+                }
+
+                //using (var fs = System.IO.File.OpenWrite(Path.Combine(path, "FULL.mp3")))
+                //{
+                //    var buffer = System.IO.File.ReadAllBytes(Path.Combine(path, "YOUSPENTpart.mp3"));
+                //    fs.Write(buffer, 0, buffer.Length);
+                //    buffer = System.IO.File.ReadAllBytes(Path.Combine(path, "synthBody.mp3"));
+                //    fs.Write(buffer, 0, buffer.Length);
+                //    fs.Flush();
+                //}
+
+
+
+                //string[] vs = new string[]
+                //{
+                //    "C:\\Users\\Egor\\OneDrive\\Рабочий стол\\Fixed Gear\\synthBody.mp3",
+                //    "C:\\Users\\Egor\\OneDrive\\Рабочий стол\\Fixed Gear\\YOUSPENTpart.mp3"
+
+                //};
+                //Stream output = System.IO.File.OpenWrite("C:\\Users\\Egor\\OneDrive\\Рабочий стол\\Fixed Gear\\YOUSPENTpart.mp3");
+
+                //foreach (string file in vs)
+                //{
+                //    Mp3FileReader reader = new Mp3FileReader(file);
+                //    if ((output.Position == 0) && (reader.Id3v2Tag != null))
+                //    {
+                //        output.Write(reader.Id3v2Tag.RawData, 0, reader.Id3v2Tag.RawData.Length);
+                //    }
+                //    Mp3Frame frame;
+                //    while ((frame = reader.ReadNextFrame()) != null)
+                //    {
+                //        output.Write(frame.RawData, 0, frame.RawData.Length);
+                //    }
+                //}
+                //Console.WriteLine("okkk");
+
+                await using Stream stream = System.IO.File.OpenRead(@"C:\\Users\\Egor\\OneDrive\\Рабочий стол\\Fixed Gear\\test.wav");
+                await botClient.SendVoiceAsync(message.Chat.Id, voice: new Telegram.Bot.Types.InputFiles.InputOnlineFile(content: stream, fileName: "test.wav"));
                 return;
             }
             else
             {
-                //await botClient.SendTextMessageAsync(message.Chat.Id, "I don't understand your request");
-
-                await botClient.SendTextMessageAsync(message.Chat.Id,$"{count}) {message.Text}. MessageId = {message.MessageId}");
+                if (message.Text != "---")
+                    await botClient.SendTextMessageAsync(message.Chat.Id, $"{count}) {message.Text}. MessageId = {message.MessageId}");
+                list.Add(message.Text);
                 //shoppindList.Add(message.Text);
                 count++;
                 return;

@@ -16,23 +16,26 @@ namespace My_telegram_bot
         int listItemNumber;
         Dictionary<string, string> callbackQueryList = new Dictionary<string, string>();
         List<Message> messages = new List<Message>();
-        List<string> shoppingList = new List<string>();
+        //List<string> shoppingList = new List<string>();
         private string likeSticker = "✅";
         private string beforeLikeSticker = "⬜️";
-        private string caption = "Your shopping list 🗓: \n";
+        private string caption = $"Your shopping list 🗓:\n({DateTime.Now})\n";
+
 
         public ShoppingList(ITelegramBotClient botClient, Message message)
         {
             this.botClient = botClient;
             this.message = message;
-            listItemNumber = int.Parse(message.Text.Split(' ')[1]);
         }
+
         private Dictionary<string, string> CreateDictionary(List<string> shoppingList)
         {
             for (int i = 0; i < shoppingList.Count; i++)
             {
-                callbackQueryList.Add($"{beforeLikeSticker} {shoppingList[i].ToUpper()}", $"ShoppingList.{shoppingList[i]}.false");
+                callbackQueryList.Add($"ShoppingList.{shoppingList[i]}",$"{beforeLikeSticker} {shoppingList[i].ToUpper()}");
             }
+            callbackQueryList.Add("ShoppingList.Delete", "❌ Delete list");
+
             return callbackQueryList;
         }
         private static InlineKeyboardMarkup GetInlineKeyboardCallBackData(Dictionary<string, string> buttonsData)
@@ -54,8 +57,8 @@ namespace My_telegram_bot
                 {
                     new InlineKeyboardButton("some tex")
                     {
-                       Text = buttonsData.Keys.ElementAt(i),
-                       CallbackData = buttonsData.Values.ElementAt(i),
+                       Text = buttonsData.Values.ElementAt(i),
+                       CallbackData = buttonsData.Keys.ElementAt(i),
                     }
                 });
             }
@@ -63,50 +66,74 @@ namespace My_telegram_bot
             return new InlineKeyboardMarkup(buttons);
         }
 
-        public async Task ListViaCommand()
+        public async Task CreateListReplay(List<string> list)
         {
-            for (int i = message.MessageId - (listItemNumber * 2); i < message.MessageId; i += 2)
+            string startWord = message.ReplyToMessage.Text;
+
+            for (int i = 0; i < list.Count; i++)
             {
-                Message tempMessage = botClient.ForwardMessageAsync(message.Chat.Id, message.Chat.Id, i).Result; //message.MessageId - (listItemNumber * 2)
-                shoppingList.Add(tempMessage.Text);
+                if(list[i] == startWord)
+                {
+                    list.RemoveRange(0,i);
+                }
             }
 
-            InlineKeyboardMarkup inlineKeyboardMarkup = GetInlineKeyboardCallBackData(CreateDictionary(shoppingList));
+            InlineKeyboardMarkup inlineKeyboardMarkup = GetInlineKeyboardCallBackData(CreateDictionary(list));
 
             await botClient.SendTextMessageAsync(message.Chat.Id, caption, replyMarkup: inlineKeyboardMarkup);
             return;
         }
-        public void ListViaReplay()
+        public async Task CreateListCommand(List<string> list)
         {
+            int count = int.Parse(message.Text.Split(' ')[1]);
+            Console.WriteLine(string.Join(", ", list));
 
+            if (count > list.Count)
+            {
+                await botClient.SendTextMessageAsync(message.Chat.Id, "Не правильное количиство элементов списка");
+                return;
+            }
+            else
+            if(count < list.Count)
+            {
+                list.RemoveRange(count,list.Count - count);
+            }
+
+            InlineKeyboardMarkup inlineKeyboardMarkup = GetInlineKeyboardCallBackData(CreateDictionary(list));
+
+            await botClient.SendTextMessageAsync(message.Chat.Id, caption, replyMarkup: inlineKeyboardMarkup);
+            return;
         }
-        //public async Task HandlerCallbackQueryShopping(CallbackQuery callbackQuery)
-        //{
-        //    bool isItBought = bool.Parse(callbackQuery.Data.Split('.')[2]);
-        //    if (isItBought)
-        //    {
-        //        for (int i = 0; i < callbackQueryList.Count; i++)
-        //        {
-        //            if (callbackQueryList.TryGetValue($"{beforeLikeSticker} {callbackQuery.Data.Split('.')[1]}",out string value))
-        //            {
-        //                if(value == callbackQuery.Data)
-        //                {
-        //                    callbackQueryList[$"{beforeLikeSticker} {callbackQuery.Data.Split('.')[1]}"] = callbackQueryList.Add($"{likeSticker} {callbackQuery.Data.Split('.')[1]}", callbackQuery.Data.Replace("false","true"));
-        //                }
-        //            }
-        //        }
-        //        //foreach (KeyValuePair<string, string> item in callbackQueryList)
-        //        //{
-        //        //    if (item.Value == callbackQuery.Data)
-        //        //    {
-        //        //        item.
-        //        //    }
-        //        //}
-        //    }
 
-            //TODO:дописать обработчик, продумать сохранение списков, продумать получение сообщений по из id
-            //await botClient.EditMessageTextAsync(callbackQuery.Message.Chat.Id, callbackQuery.Message.MessageId, caption);
-            //return;
-        //}
+        public async Task HandlerCallbackQueryShopping(CallbackQuery callbackQuery) //TODO: Добавитиь Сохранение??
+        {
+            if (callbackQuery.Data == "ShoppingList.Delete")
+            {
+                await botClient.EditMessageTextAsync(callbackQuery.Message.Chat.Id, callbackQuery.Message.MessageId, "* * *");
+                return;
+            }
+            else
+            {
+                foreach (KeyValuePair<string, string> pair in callbackQueryList)
+                {
+                    if (pair.Key == callbackQuery.Data)
+                    {
+                        if (pair.Value.StartsWith(beforeLikeSticker))
+                            callbackQueryList[pair.Key] = pair.Value.Replace(beforeLikeSticker, likeSticker);
+                        else if (pair.Value.StartsWith(likeSticker))
+                            callbackQueryList[pair.Key] = pair.Value.Replace(likeSticker, beforeLikeSticker);
+
+                        break;
+                    }
+                }
+                InlineKeyboardMarkup inlineKeyboardMarkup = GetInlineKeyboardCallBackData(callbackQueryList);
+                await botClient.EditMessageTextAsync(
+                    callbackQuery.Message.Chat.Id,
+                    callbackQuery.Message.MessageId,
+                    text: caption,
+                    replyMarkup: inlineKeyboardMarkup);
+            }
+            return;
+        }
     }
 }
