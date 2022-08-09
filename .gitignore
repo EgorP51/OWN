@@ -1,5 +1,3 @@
 .vs
 obj
 bin
-OwnDatabase.mdf
-OwnDatabase_log.ldf

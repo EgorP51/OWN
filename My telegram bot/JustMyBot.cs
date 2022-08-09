@@ -25,6 +25,7 @@ namespace My_telegram_bot
         private System.Timers.Timer aTimer = new System.Timers.Timer(60000);
         private int count = 1;
         private ShoppingList shoppingList;
+        private Folders folders;
         private List<string> list = new List<string>();
         int database = 0;
         public async Task Start()
@@ -63,7 +64,7 @@ namespace My_telegram_bot
 
         private async Task HandlerUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
-
+            Console.WriteLine(update.Type.ToString());
             if (update.Type == UpdateType.Message && update?.Message?.Text != null)
             {
                 if (update.Message.From.Username == "egorpustovoit")
@@ -72,8 +73,8 @@ namespace My_telegram_bot
                 }
                 else
                 {
-                    await using Stream stream = System.IO.File.OpenRead(@"C:\\Users\\Egor\\OneDrive\\Рабочий стол\\Fixed Gear\\notmevoice.wav");
-                    await botClient.SendVoiceAsync(update.Message.Chat.Id, voice: new Telegram.Bot.Types.InputFiles.InputOnlineFile(content: stream, fileName: "test.wav"));
+                    await using Stream stream = System.IO.File.OpenRead(@"..\..\..\notmevoice.wav");
+                    await botClient.SendVoiceAsync(update.Message.Chat.Id, voice: new Telegram.Bot.Types.InputFiles.InputOnlineFile(content: stream, fileName: @"notmevoice.wav"));
                     return;
                 }
             }
@@ -90,9 +91,19 @@ namespace My_telegram_bot
                 shoppingList.HandlerCallbackQueryShopping(callbackQuery);
                 return;
             }
+            else
+            if (callbackQuery.Data.StartsWith("Folders"))
+            {
+                try
+                {
+                    folders.HandlerCallbackQueryFolders(callbackQuery);
+                    return;
+                }catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+                }
+            }
         }
-
-
 
         private async Task HandlerMessageAsync(ITelegramBotClient botClient, Message message)
         {
@@ -104,13 +115,15 @@ namespace My_telegram_bot
             {
                 //TODO: add info!
                 await botClient.SendTextMessageAsync(message.Chat.Id, "List of commands and reminders for the work of the bot");
+                return;
             }
             else
-            if (message.Text == "/toNotes")
+            if (message.Text == "/folders")
             {
-                // заметки вынести в отдельную папу (не делать отдельную фитчу)
-                var note = message.ReplyToMessage?.Text;
+                folders = new Folders(botClient,message);
 
+                folders.MyFolders();
+                return;
             }
             else
             if (int.TryParse(message.Text, out int currentSpending))
@@ -129,6 +142,7 @@ namespace My_telegram_bot
                 // get info from database
                 return;
             }
+            else
             if (message.Text.StartsWith("/list")) // парсить и получать N (/list N) последних сообщений 
             {
                 shoppingList = new ShoppingList(botClient, message);
@@ -138,6 +152,7 @@ namespace My_telegram_bot
                 count = 1;
                 return;
             }
+            else
             if(Char.TryParse(message.Text, out char point)) // получать сообщения начиная с сообщения на которое ответили  
             {
                 shoppingList = new ShoppingList(botClient, message);
@@ -147,6 +162,7 @@ namespace My_telegram_bot
                 count = 1;
                 return;
             }
+            else
             if (message.Text.StartsWith("/voice"))
             {
                 var name = message.ReplyToMessage?.Text;

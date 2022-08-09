@@ -9,7 +9,7 @@ namespace My_telegram_bot
 {
     internal class Database
     {
-        SqlConnection sqlConnection = new SqlConnection(@"Data Source=DESKTOP-6ELFR;initial Catalog=OwnDatabase;Integrated Security=True");
+        public readonly SqlConnection sqlConnection = new SqlConnection(@"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=C:\Users\Egor\source\repos\My telegram bot\My telegram bot\OwnDatabase.mdf;Integrated Security=True");
 
         public void OpenConnection()
         {
