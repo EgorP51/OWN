@@ -9,17 +9,21 @@ namespace My_telegram_bot
 {
     internal class Folders
     {
+        public InlineKeyboardMarkup BaseInlineKeyboard { get;private set; }
         private ITelegramBotClient botClient;
-        private Message message;
+        private string newFolderName;
         private Database database;
-        InlineKeyboardMarkup baseInlineKeyboard;
+        private Message message;
+        public bool IsNewFolder { get; private set; } = false;
+        public bool IsAddingToFolder { get; set; } = false;
+        public int MessageId { get;set; }
 
         public Folders(ITelegramBotClient botClient, Message message)
         {
             this.botClient = botClient;
             this.message = message;
             database = new Database();
-            baseInlineKeyboard = new
+            BaseInlineKeyboard = new
                     (
                     new[]
                     {
@@ -30,17 +34,12 @@ namespace My_telegram_bot
                         new []
                         {
                             InlineKeyboardButton.WithCallbackData(text:"Add",callbackData: "Folders.Add"),
-                            InlineKeyboardButton.WithCallbackData(text:"Delete",callbackData: "Folders.Delete")
                         }
                     }
 
                     );
         }
-        public async void MyFolders()
-        {
-            await botClient.SendTextMessageAsync(message.Chat.Id, "Folders", replyMarkup: baseInlineKeyboard);
-            return;
-        }
+        
 
         private List<string> FolderListFromDB()
         {
@@ -68,7 +67,8 @@ namespace My_telegram_bot
 
             return result;
         }
-        private bool AddToDB(string folderName,string? body)
+
+        public bool AddToDB(string folderName, string? body)
         {
             string query = body == null ?
                 $"INSERT INTO OwnBotFolders( FolderName) VALUES( '{folderName}' )" :
@@ -78,7 +78,7 @@ namespace My_telegram_bot
                 database.OpenConnection();
                 using (var cmd = new SqlCommand(query, database.sqlConnection))
                 {
-                    if(cmd.ExecuteNonQuery() == 1)
+                    if (cmd.ExecuteNonQuery() == 1)
                     {
                         return true;
                     }
@@ -88,52 +88,152 @@ namespace My_telegram_bot
                     }
                 }
 
-            }catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
             }
             return false;
         }
 
+        public async void GetNewFolderName(Message mess)
+        {
+            IsNewFolder = false;
+            newFolderName = mess.Text;
+            InlineKeyboardMarkup InlineKeyboard = new
+                (
+                new[]
+                {
+                        new []
+                        {
+                            InlineKeyboardButton.WithCallbackData(text:"Yes",callbackData: "Folders.addNewFolder")
+                        }
+                }
 
+                );
+            await botClient.EditMessageTextAsync(
+                mess.Chat.Id,
+                mess.MessageId-1,
+                $"Create new folder \"{newFolderName}\"?",
+                replyMarkup: InlineKeyboard);
+            IsNewFolder = true;
+
+            return;
+        }
+
+        public async Task GetMessagesFromDB(string folderName)
+        {
+            string query = $"SELECT Body FROM OwnBotFolders WHERE FolderName='{folderName}'";
+            SqlCommand command = new SqlCommand(query, database.sqlConnection);
+
+            List<object> result = new List<object>();
+
+            try
+            {
+                database.OpenConnection();
+                SqlDataReader reader = command.ExecuteReader();
+                // iterate your results here
+
+                while (reader.Read())
+                {
+                    result.Add(reader[0]);
+                }
+                database.CloseConnection();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+
+            foreach(var item in result)
+            {
+                Thread.Sleep(100);
+                if (item != null)
+                {
+                    try
+                    {
+                        await botClient.ForwardMessageAsync(message.Chat.Id, message.Chat.Id, int.Parse(item.ToString()));
+                        Console.WriteLine("OK => " + item.ToString());
+                        //return;
+
+                    }catch (Exception ex)
+                    {
+                        //await botClient.SendTextMessageAsync(message.Chat.Id, "Error");
+                        Console.WriteLine("Error Folder.cs line 159 => "+item.ToString());
+                    }
+                }
+            }
+        }
+
+        public InlineKeyboardMarkup MyFolders()
+        {
+            var foldersName = FolderListFromDB();
+            InlineKeyboardMarkup inlineKeyboardMarkup = GetInlineKeyboardCallBackData(foldersName);
+            return inlineKeyboardMarkup;
+        }
         public async Task HandlerCallbackQueryFolders(CallbackQuery callbackQuery) //inline keyboard click handler
         {
             if (callbackQuery.Data == "Folders.See")
             {
-                var foldersName = FolderListFromDB();
-                InlineKeyboardMarkup inlineKeyboardMarkup = GetInlineKeyboardCallBackData(foldersName);
+                InlineKeyboardMarkup inlineKeyboardMarkup = MyFolders();
 
                 await botClient.EditMessageTextAsync(callbackQuery.Message.Chat.Id, callbackQuery.Message.MessageId, $"All your folders:", replyMarkup: inlineKeyboardMarkup);
                 return;
             }
-            else 
-            if(callbackQuery.Data == "Folders.Back")
+            else
+            if (callbackQuery.Data == "Folders.Back")
             {
-                await botClient.EditMessageTextAsync(callbackQuery.Message.Chat.Id, callbackQuery.Message.MessageId, "Folders", replyMarkup: baseInlineKeyboard);
+                await botClient.EditMessageTextAsync(callbackQuery.Message.Chat.Id, callbackQuery.Message.MessageId, "Folders", replyMarkup: BaseInlineKeyboard);
                 return;
             }
             else
             if (callbackQuery.Data == "Folders.Add")
             {
-                await botClient.EditMessageTextAsync(callbackQuery.Message.Chat.Id, callbackQuery.Message.MessageId, "Add folder");
-                AddToDB("TestFolderName",null);
+                await botClient.EditMessageTextAsync(callbackQuery.Message.Chat.Id, callbackQuery.Message.MessageId, "Enter folder name");
+                IsNewFolder = true;
                 return;
+            }
+            else if (callbackQuery.Data == "Folders.addNewFolder")
+            {
+                if (AddToDB(newFolderName, null))
+                {
+                    await botClient.SendTextMessageAsync(
+                        message.Chat.Id,
+                        $"New folder has successfully created");
+                }
+                else
+                {
+                    await botClient.EditMessageTextAsync(message.Chat.Id, message.MessageId, "Problem with adding");
+                }
             }
             else
-            if (callbackQuery.Data == "Folders.Delete")
-            {
-                await botClient.SendTextMessageAsync(callbackQuery.Message.Chat.Id, "TODO: add something :)");
-                return;
-            }
-            else 
-            if(callbackQuery.Data == "Folders.NULL")
+            if (callbackQuery.Data == "Folders.NULL")
             {
                 botClient.SendTextMessageAsync(callbackQuery.Message.Chat.Id, "They haven't shown up yet <3");
                 return;
             }
             else
             {
-                await botClient.SendTextMessageAsync(callbackQuery.Message.Chat.Id, callbackQuery.Data.Split('.')[1]);
+                string foderName = callbackQuery.Data.Split('.')[1];
+
+                if (IsAddingToFolder)
+                {
+                    if(AddToDB(foderName, MessageId.ToString()))
+                    {
+                        await botClient.EditMessageTextAsync(message.Chat.Id, message.MessageId+1,$"Successfully added to database");
+                        IsAddingToFolder = false;
+                        return;
+                    }
+                    else
+                    {
+                        await botClient.EditMessageTextAsync(message.Chat.Id, message.MessageId, "Problem with adding");
+                        return;
+                    }
+                }
+                else
+                {
+                    GetMessagesFromDB(foderName);
+                }
                 return;
             }
         }
@@ -149,11 +249,9 @@ namespace My_telegram_bot
                     keyValuePairs.Add($"Folders.{buttonsData[i]}", buttonsData[i]);
                 }
                 keyValuePairs.Add("Folders.Back", "◀️ Come back");
-                // Rows Count
+
                 int count = keyValuePairs.Count;
 
-                // List of rows 
-                // Every 'List<InlineKeyboardButton>' is row
                 List<List<InlineKeyboardButton>> buttons = new List<List<InlineKeyboardButton>>(count);
 
                 for (int i = 0; i < count; i++)
@@ -173,7 +271,7 @@ namespace My_telegram_bot
             }
             else
             {
-                return  new
+                return new
                     (
                     new[]
                     {

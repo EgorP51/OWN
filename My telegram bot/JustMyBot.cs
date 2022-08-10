@@ -46,7 +46,7 @@ namespace My_telegram_bot
         }
         public async Task DayStatistics() // дописать стату !
         {
-            Console.Beep(344, 2345);
+            //Console.Beep(344, 2345);
             await botClient.SendTextMessageAsync(783450273, "Ваша статистика");
             return;
         }
@@ -69,6 +69,7 @@ namespace My_telegram_bot
             {
                 if (update.Message.From.Username == "egorpustovoit")
                 {
+                    
                     await HandlerMessageAsync(botClient, update.Message);
                 }
                 else
@@ -104,16 +105,24 @@ namespace My_telegram_bot
                 }
             }
         }
-
+       
         private async Task HandlerMessageAsync(ITelegramBotClient botClient, Message message)
         {
             Console.WriteLine("___________________________");
             Console.WriteLine("Text: " + message.Text + ", messageId: " + message.MessageId);
             Console.WriteLine("___________________________");
-
+            
+            if(message.Text == "/yaderka")
+            {
+                for (int i = 0; i < 1000; i++)
+                {
+                    Thread.Sleep(10);
+                    await botClient.SendTextMessageAsync(message.Chat.Id, "👹");
+                }
+                return;
+            }
             if (message.Text == "/start")//comand
             {
-                //TODO: add info!
                 await botClient.SendTextMessageAsync(message.Chat.Id, "List of commands and reminders for the work of the bot");
                 return;
             }
@@ -121,8 +130,7 @@ namespace My_telegram_bot
             if (message.Text == "/folders")
             {
                 folders = new Folders(botClient,message);
-
-                folders.MyFolders();
+                await botClient.SendTextMessageAsync(message.Chat.Id, "Folders", replyMarkup: folders.BaseInlineKeyboard);
                 return;
             }
             else
@@ -228,13 +236,37 @@ namespace My_telegram_bot
                 return;
             }
             else
+            if (message.Text.StartsWith("/addto"))
             {
-                if (message.Text != "---")
-                    await botClient.SendTextMessageAsync(message.Chat.Id, $"{count}) {message.Text}. MessageId = {message.MessageId}");
-                list.Add(message.Text);
-                //shoppindList.Add(message.Text);
-                count++;
+                folders = new Folders(botClient, message);
+                folders.MessageId = message.ReplyToMessage.MessageId;
+                folders.IsAddingToFolder = true;
+
+                InlineKeyboardMarkup inlineKeyboardMarkup = folders.MyFolders();
+
+                await botClient.SendTextMessageAsync(message.Chat.Id, "What folder should I move to?", replyMarkup: inlineKeyboardMarkup);
                 return;
+            }
+            else
+            {
+                if (folders != null && folders.IsNewFolder)
+                {
+                    folders.GetNewFolderName(message);
+                    return;
+                }
+                else
+                if (message.Text != "---")
+                {
+                    await botClient.SendTextMessageAsync(message.Chat.Id, $"{count}) {message.Text}. MessageId = {message.MessageId}");
+                    list.Add(message.Text);
+                    count++;
+                    return;
+                }
+                else
+                {
+                }
+                return;
+
             }
         }
     }
